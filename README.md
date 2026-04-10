@@ -1,3 +1,4 @@
+.net 8.0.419
 # Setup
 
 ```
@@ -11,9 +12,10 @@ cd VitakorProb
 **Шаг 2**
 
 ```
+dotnet restore
+
 dotnet ef database update --context AppDbContext
 
-dotnet restore
 
 dotnet run
 
