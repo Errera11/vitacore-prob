@@ -1,0 +1,127 @@
+@page "/Auction"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using VitakorProb.Interfaces
+@using VitakorProb.Model
+
+@inject IMandarinService MandarinService
+@inject IBidService BidService
+
+@inject AuthenticationStateProvider AuthStateProvider
+@rendermode InteractiveServer
+
+<PageTitle>Auction</PageTitle>
+
+<h1>Auction</h1>
+
+<div class="d-flex w-100 h-100 align-items-center justify-content-center">
+    <div class="d-flex flex-column align-items-center g-3">
+        <span>Мандаринки</span>
+
+        <span>Осталось до конца аукциона: @FormatTime(TimeLeft)</span>
+
+        <div class="mandarin-card">
+            <img class="object-fit-contain w-100 h-100" src="@_mandarin.Url" alt="img"/>
+        </div>
+        
+        <p class="w-50">@_mandarin.Description</p>
+        
+        @if (_mandarin?.Bids is { Count: > 0 })
+        {
+            <p>Текущая цена: @_mandarin.Bids.LastOrDefault()?.Cost</p>
+            <p>Текущий покупатель: @_mandarin.Bids.ElementAt(0)?.User?.Email</p>
+        }
+        else
+        {
+            <p>Нет ставок на данный момент</p>
+        }
+        
+
+        <AuthorizeView Context="auth">
+            <Authorized>
+                <EditForm Model="Model" OnValidSubmit="Submit" FormName="Mandarin">
+                    <label>
+                        <InputNumber placeholder="Сделайте ставку" DisplayName="Bid" @bind-Value="Model!.Cost"/>
+                    </label>
+
+                    <button type="submit">Сделать ставку</button>
+                </EditForm>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private BidModel? Model { get; set; }
+
+    private Mandarin _mandarin;
+
+    private AuthenticationState _authState;
+    
+    public class BidModel
+    {
+        [Required]
+        public int Cost { get; set; }
+    }
+
+    private async void Submit()
+    {
+        var user = _authState.User;
+        
+        
+        if (user.Identity is { IsAuthenticated: true })
+        {
+            var userId = _authState.User.FindFirst(ClaimTypes.NameIdentifier)!.Value;
+
+            var bid = new Bid()
+            {
+                UserId = int.Parse(userId),
+                MandarinId = _mandarin.Id,
+                Cost = Model.Cost
+            };
+            
+            await BidService.PlaceBid(bid);
+
+            _mandarin = await MandarinService.GetMandarin();
+            
+            StateHasChanged(); 
+        }
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        _mandarin = await MandarinService.GetMandarin();
+        TimeLeft = _mandarin.ExpiresAt - DateTime.Now;
+
+        _authState = await AuthStateProvider.GetAuthenticationStateAsync();
+    }
+
+    private TimeSpan? TimeLeft { get; set; } = null;
+    private System.Timers.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        Model ??= new();
+        
+        _timer = new System.Timers.Timer(1000);
+        _timer.Elapsed += async (s, e) =>
+        {
+            TimeLeft = _mandarin.ExpiresAt - DateTime.UtcNow;
+            await InvokeAsync(StateHasChanged);
+        };
+        _timer.Enabled = true;
+    }
+
+    private string FormatTime(TimeSpan? t)
+    {
+        if (t.HasValue && t.Value > TimeSpan.Zero)
+        {
+            return t.Value.ToString(@"hh\:mm\:ss");
+        }
+        return "";
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}
