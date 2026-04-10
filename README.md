@@ -4,11 +4,11 @@
 cd VitakorProb
 ```
 
-** Шаг 1
+** Шаг 1 **
 
 Создать и настроить .env файл (пример .env.example)
 
-** Шаг 2
+** Шаг 2 **
 
 ```
 dotnet ef database update --context AppDbContext
